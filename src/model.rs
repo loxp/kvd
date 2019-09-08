@@ -4,12 +4,8 @@ type Command = Vec<Vec<u8>>;
 
 #[derive(Debug, Fail, PartialEq)]
 pub enum KvdError {
-    #[fail(display = "parse command error: {}", err)]
-    ErrParseCommand { err: String },
-    #[fail(display = "invalid command : {}", cmd)]
-    InvalidCommand { cmd: String },
-    #[fail(display = "invalid arg number: {}", num)]
-    InvalidArgNumber { num: i32 },
+    #[fail(display = "key not found")]
+    KeyNotFound,
 }
 
 pub type KvdResult<T> = Result<T, KvdError>;
