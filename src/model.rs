@@ -1,11 +1,21 @@
-use failure::_core::convert::TryFrom;
+use std::io;
 
 type Command = Vec<Vec<u8>>;
 
-#[derive(Debug, Fail, PartialEq)]
+#[derive(Debug, Fail)]
 pub enum KvdError {
     #[fail(display = "key not found")]
     KeyNotFound,
+    #[fail(display = "path is not directory")]
+    PathIsNotDirectory,
+    #[fail(display = "io error: {}", _0)]
+    Io(#[cause]io::Error),
+}
+
+impl From<io::Error> for KvdError {
+    fn from(e: io::Error) -> Self {
+        KvdError::Io(e)
+    }
 }
 
 pub type KvdResult<T> = Result<T, KvdError>;
