@@ -1,4 +1,5 @@
 use crate::model::{KvdError, KvdResult};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
@@ -13,10 +14,25 @@ struct Store {
     index: BTreeMap<Vec<u8>, CommandPosition>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Command {
+    Set { key: Vec<u8>, value: Vec<u8> },
+    Del { key: Vec<u8> },
+}
+
+impl Command {
+    pub fn set(key: Vec<u8>, value: Vec<u8>) -> Self {
+        Self::Set { key, value }
+    }
+    pub fn del(key: Vec<u8>) -> Self {
+        Self::Del { key }
+    }
+}
+
 struct CommandPosition {
-    pub file_number: u64,
-    pub pos: usize,
-    pub len: usize,
+    pub file_num: u64,
+    pub pos: u64,
+    pub len: u64,
 }
 
 struct FileStore {
@@ -113,15 +129,20 @@ impl FileStore {
         }
     }
 
-    pub fn set(&mut self, key: &Vec<u8>, value: &Vec<u8>) -> KvdResult<CommandPosition> {
+    pub fn set(&mut self, key: Vec<u8>, value: Vec<u8>) -> KvdResult<CommandPosition> {
         if self.current_write_log.is_full() {
             self.change_to_new_wal()?;
         }
 
-        unimplemented!()
-        // serialize the key value pair
-        // write to file
-        // get the file number, offset and size
+        let command = Command::set(key, value);
+        let data = serde_json::to_vec(&command)?;
+        self.current_write_log.write(&data)?;
+
+        Ok(CommandPosition {
+            file_num: self.current_file_num,
+            pos: self.current_write_log.pos,
+            len: data.len() as u64,
+        })
     }
 
     fn build_wal_writer(path: &Path, file_num: u64) -> KvdResult<WalWriter<File>> {

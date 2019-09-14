@@ -10,11 +10,19 @@ pub enum KvdError {
     PathIsNotDirectory,
     #[fail(display = "io error: {}", _0)]
     Io(#[cause] io::Error),
+    #[fail(display = "serde json error: {}", _0)]
+    SerdeJson(#[cause] serde_json::error::Error),
 }
 
 impl From<io::Error> for KvdError {
     fn from(e: io::Error) -> Self {
         KvdError::Io(e)
+    }
+}
+
+impl From<serde_json::error::Error> for KvdError {
+    fn from(e: serde_json::error::Error) -> Self {
+        KvdError::SerdeJson(e)
     }
 }
 
