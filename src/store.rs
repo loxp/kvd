@@ -20,6 +20,7 @@ struct CommandPosition {
 }
 
 struct FileStore {
+    dir: PathBuf,
     current_file_num: u64,
     current_write_log: WalWriter<File>,
     read_logs: Vec<WalReader<File>>,
@@ -81,6 +82,7 @@ impl FileStore {
             let mut readers: Vec<WalReader<File>> = Vec::new();
             let writer = Self::build_wal_writer(&path, 0)?;
             Ok(FileStore {
+                dir: path.clone(),
                 current_file_num: 0,
                 current_write_log: writer,
                 read_logs: readers,
@@ -103,6 +105,7 @@ impl FileStore {
 
             let writer = Self::build_wal_writer(&path, last_file_num)?;
             Ok(FileStore {
+                dir: path.clone(),
                 current_file_num: last_file_num,
                 current_write_log: writer,
                 read_logs: readers,
@@ -110,18 +113,22 @@ impl FileStore {
         }
     }
 
+    pub fn set(&mut self, key: &Vec<u8>, value: &Vec<u8>) -> KvdResult<CommandPosition> {
+        if self.current_write_log.is_full() {
+            self.change_to_new_wal()?;
+        }
+
+        unimplemented!()
+        // serialize the key value pair
+        // write to file
+        // get the file number, offset and size
+    }
+
     fn build_wal_writer(path: &Path, file_num: u64) -> KvdResult<WalWriter<File>> {
         let path = Self::wal_path(&path, file_num);
         let file = Self::new_wal_file(path)?;
         let writer = WalWriter::new(file)?;
         Ok(writer)
-    }
-
-    pub fn set(&mut self, key: &Vec<u8>, value: &Vec<u8>) -> KvdResult<CommandPosition> {
-        unimplemented!()
-        // serialize the key value pair
-        // write to file
-        // get the file number, offset and size
     }
 
     // important, focus on flat_map() and flatten()
@@ -142,7 +149,10 @@ impl FileStore {
     }
 
     fn change_to_new_wal(&mut self) -> KvdResult<()> {
-        unimplemented!()
+        let current_num = self.current_file_num + 1;
+        self.current_write_log = Self::build_wal_writer(&self.dir, current_num)?;
+        self.current_file_num = current_num;
+        Ok(())
     }
 
     fn is_wal_file(path: &Path) -> bool {
