@@ -1,10 +1,12 @@
 use crate::model::{KvdError, KvdResult};
 use std::path::{PathBuf, Path};
 use std::fs::{File, OpenOptions};
-use std::fs;
+use std::{fs, io};
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
-use std::io::Seek;
+use std::io::{Seek, Write, BufWriter, SeekFrom, Read, BufReader};
+
+const DEFAULT_FILE_CAPACITY: u64 = 1024;
 
 struct Store {
     file_store: FileStore,
@@ -12,14 +14,24 @@ struct Store {
 }
 
 struct CommandPosition {
-    pub file_id: usize,
+    pub file_number: u64,
     pub pos: usize,
     pub len: usize,
 }
 
 struct FileStore {
-    current_write_log: File,
-    read_logs: Vec<File>,
+    current_write_log: WalWriter<File>,
+    read_logs: Vec<WalReader<File>>,
+}
+
+struct WalWriter<W: Write + Seek> {
+    writer: BufWriter<W>,
+    pos: u64,
+}
+
+struct WalReader<R: Read + Seek> {
+    reader: BufReader<R>,
+    pos: u64,
 }
 
 struct StoreIndex {
@@ -63,36 +75,53 @@ impl Store {
 }
 
 impl FileStore {
-    const DEFAULT_FILE_CAPACITY: u64 = 1024;
-
     pub fn open(path: PathBuf) -> KvdResult<FileStore> {
         fs::create_dir_all(&path)?;
-        let sorted_file_number_list = Self::get_sorted_file_number_list(&path)?;
 
-        let mut read_logs: Vec<File> = Vec::new();
-        for file_num in sorted_file_number_list.iter() {
-            let wal_path = Self::wal_path(&path, *file_num);
-            let file = File::open(wal_path)?;
-            read_logs.push(file);
-        }
-
-        // open the last file to write, if no file exists or the last file is full, create a new file
-        let current_write_log = if sorted_file_number_list.is_empty() {
-            Self::new_wal_file(Self::wal_path(&path, 0))?
+        let mut sorted_file_number_list = Self::get_sorted_file_number_list(&path)?;
+        if sorted_file_number_list.is_empty() {
+            let mut readers: Vec<WalReader<File>> = Vec::new();
+            let writer = Self::build_wal_writer(&path, 0)?;
+            Ok(FileStore {
+                read_logs: readers,
+                current_write_log: writer,
+            })
         } else {
-            let last_file_number = *sorted_file_number_list.last().unwrap();
-            let wal_path = if Self::is_wal_file_full(read_logs.last().unwrap()) {
-                Self::wal_path(&path, last_file_number + 1)
-            } else {
-                Self::wal_path(&path, last_file_number + 1)
-            };
-            Self::new_wal_file(wal_path)?
-        };
+            // take out the last file, and put all other files into reader list
+            let last_file_num = sorted_file_number_list.pop().unwrap();
+            let mut readers: Vec<WalReader<File>> = Vec::new();
+            for file_num in sorted_file_number_list.iter() {
+                let wal_path = Self::wal_path(&path, *file_num);
+                let read_wal = File::open(wal_path)?;
+                let reader = WalReader::new(read_wal)?;
+                readers.push(reader);
+            }
 
-        Ok(FileStore {
-            read_logs,
-            current_write_log,
-        })
+            let wal_path = Self::wal_path(&path, last_file_num);
+            let read_wal = File::open(wal_path)?;
+            let reader = WalReader::new(read_wal)?;
+            readers.push(reader);
+
+            let writer = Self::build_wal_writer(&path, last_file_num)?;
+            Ok(FileStore {
+                read_logs: readers,
+                current_write_log: writer,
+            })
+        }
+    }
+
+    fn build_wal_writer(path: &Path, file_num: u64) -> KvdResult<WalWriter<File>> {
+        let path = Self::wal_path(&path, file_num);
+        let file = Self::new_wal_file(path)?;
+        let writer = WalWriter::new(file)?;
+        Ok(writer)
+    }
+
+    pub fn set(&mut self, key: &Vec<u8>, value: &Vec<u8>) -> KvdResult<CommandPosition> {
+        unimplemented!()
+        // serialize the key value pair
+        // write to file
+        // get the file number, offset and size
     }
 
     // important, focus on flat_map() and flatten()
@@ -109,17 +138,16 @@ impl FileStore {
         Ok(file_number_list)
     }
 
+    fn change_to_new_wal(&mut self) -> KvdResult<()> {
+        unimplemented!()
+    }
+
     fn is_wal_file(path: &Path) -> bool {
         path.is_file() && path.starts_with("kvd_") && path.ends_with(".wal")
     }
 
     fn wal_path(path: &Path, file_number: u64) -> PathBuf {
         path.join(format!("kvd_{}.wal", file_number))
-    }
-
-    // make sure the file is valid
-    fn is_wal_file_full(file: &File) -> bool {
-        file.metadata().unwrap().len() >= Self::DEFAULT_FILE_CAPACITY
     }
 
     fn new_wal_file(path: PathBuf) -> KvdResult<File> {
@@ -136,6 +164,64 @@ impl StoreIndex {
     // load from pair iterator
     pub fn load() -> KvdResult<()> {
         unimplemented!()
+    }
+}
+
+impl<W: Write + Seek> WalWriter<W> {
+    fn new(mut inner: W) -> KvdResult<Self> {
+        let pos = inner.seek(SeekFrom::Current(0))?;
+        Ok(WalWriter {
+            writer: BufWriter::new(inner),
+            pos,
+        })
+    }
+
+    fn is_full(&self) -> bool {
+        self.pos >= DEFAULT_FILE_CAPACITY
+    }
+}
+
+impl<W: Write + Seek> Write for WalWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let length = self.writer.write(buf)?;
+        self.pos += length as u64;
+        Ok(length)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.writer.flush()
+    }
+}
+
+impl<W: Write + Seek> Seek for WalWriter<W> {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        self.pos = self.writer.seek(pos)?;
+        Ok(self.pos)
+    }
+}
+
+impl<R: Read + Seek> WalReader<R> {
+    fn new(mut inner: R) -> KvdResult<Self> {
+        let pos = inner.seek(SeekFrom::Current(0))?;
+        Ok(WalReader {
+            reader: BufReader::new(inner),
+            pos,
+        })
+    }
+}
+
+impl<R: Read + Seek> Read for WalReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let len = self.reader.read(buf)?;
+        self.pos += len as u64;
+        Ok(len)
+    }
+}
+
+impl<R: Read + Seek> Seek for WalReader<R> {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        self.pos = self.reader.seek(pos)?;
+        Ok(self.pos)
     }
 }
 
