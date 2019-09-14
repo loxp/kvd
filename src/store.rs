@@ -1,10 +1,10 @@
 use crate::model::{KvdError, KvdResult};
-use std::path::{PathBuf, Path};
-use std::fs::{File, OpenOptions};
-use std::{fs, io};
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
-use std::io::{Seek, Write, BufWriter, SeekFrom, Read, BufReader};
+use std::fs::{File, OpenOptions};
+use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
+use std::{fs, io};
 
 const DEFAULT_FILE_CAPACITY: u64 = 1024;
 
@@ -20,6 +20,7 @@ struct CommandPosition {
 }
 
 struct FileStore {
+    current_file_num: u64,
     current_write_log: WalWriter<File>,
     read_logs: Vec<WalReader<File>>,
 }
@@ -48,10 +49,7 @@ impl Store {
         // return store
         let file_store = FileStore::open(path)?;
         let index = BTreeMap::new();
-        Ok(Store {
-            file_store,
-            index,
-        })
+        Ok(Store { file_store, index })
     }
 
     pub fn set(&mut self, key: Vec<u8>, value: Vec<u8>) -> KvdResult<()> {
@@ -83,8 +81,9 @@ impl FileStore {
             let mut readers: Vec<WalReader<File>> = Vec::new();
             let writer = Self::build_wal_writer(&path, 0)?;
             Ok(FileStore {
-                read_logs: readers,
+                current_file_num: 0,
                 current_write_log: writer,
+                read_logs: readers,
             })
         } else {
             // take out the last file, and put all other files into reader list
@@ -104,8 +103,9 @@ impl FileStore {
 
             let writer = Self::build_wal_writer(&path, last_file_num)?;
             Ok(FileStore {
-                read_logs: readers,
+                current_file_num: last_file_num,
                 current_write_log: writer,
+                read_logs: readers,
             })
         }
     }
@@ -130,7 +130,10 @@ impl FileStore {
             .flat_map(|res| -> KvdResult<_> { Ok(res?.path()) })
             .filter(|path| Self::is_wal_file(path))
             .flat_map(|path| {
-                path.file_name().and_then(OsStr::to_str).map(|s| s.trim_end_matches(".wal")).map(str::parse::<u64>)
+                path.file_name()
+                    .and_then(OsStr::to_str)
+                    .map(|s| s.trim_end_matches(".wal"))
+                    .map(str::parse::<u64>)
             })
             .flatten()
             .collect();
@@ -151,14 +154,20 @@ impl FileStore {
     }
 
     fn new_wal_file(path: PathBuf) -> KvdResult<File> {
-        let result = OpenOptions::new().create(true).write(true).append(true).open(path)?;
+        let result = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(true)
+            .open(path)?;
         Ok(result)
     }
 }
 
 impl StoreIndex {
     pub fn new() -> StoreIndex {
-        StoreIndex { map: BTreeMap::new() }
+        StoreIndex {
+            map: BTreeMap::new(),
+        }
     }
 
     // load from pair iterator
