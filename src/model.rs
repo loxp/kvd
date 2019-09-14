@@ -9,7 +9,7 @@ pub enum KvdError {
     #[fail(display = "path is not directory")]
     PathIsNotDirectory,
     #[fail(display = "io error: {}", _0)]
-    Io(#[cause]io::Error),
+    Io(#[cause] io::Error),
 }
 
 impl From<io::Error> for KvdError {
