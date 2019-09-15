@@ -1,4 +1,4 @@
-use crate::model::{KvdError, KvdResult};
+use crate::model::{KvdError, KvdErrorKind, KvdResult};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
@@ -84,8 +84,8 @@ impl Store {
         }
         let cmd = self.file_store.read_command_position(cmd_pos.unwrap())?;
         match cmd {
-            Command::Set { key: _, value: v } => { Ok(Some(v)) }
-            _ => Err(KvdError::InvalidValue)
+            Command::Set { key: _, value: v } => Ok(Some(v)),
+            _ => Err(KvdError::from(KvdErrorKind::InvalidCommand)),
         }
     }
 
@@ -153,7 +153,10 @@ impl FileStore {
     }
 
     fn read_command_position(&mut self, cmd_pos: &CommandPosition) -> KvdResult<Command> {
-        let mut wal_reader = self.read_logs.get_mut(cmd_pos.file_num as usize).ok_or_else(|| KvdError::KeyNotFound)?;
+        let mut wal_reader = self
+            .read_logs
+            .get_mut(cmd_pos.file_num as usize)
+            .ok_or_else(|| KvdError::from(KvdErrorKind::KeyNotFound))?;
 
         wal_reader.seek(SeekFrom::Current(cmd_pos.pos as i64))?;
         let mut data = Vec::with_capacity(cmd_pos.len as usize);

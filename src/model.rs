@@ -1,28 +1,80 @@
+use failure::_core::fmt::Display;
+use failure::{Backtrace, Context, Fail};
+use std::fmt::{Error, Formatter};
 use std::io;
 
 type Command = Vec<Vec<u8>>;
 
-#[derive(Debug, Fail)]
-pub enum KvdError {
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
+pub enum KvdErrorKind {
     #[fail(display = "key not found")]
     KeyNotFound,
+    #[fail(display = "invalid request")]
+    InvalidRequest,
+    #[fail(display = "invalid command")]
+    InvalidCommand,
     #[fail(display = "path is not directory")]
     PathIsNotDirectory,
-    #[fail(display = "io error: {}", _0)]
-    Io(#[cause] io::Error),
-    #[fail(display = "serde json error: {}", _0)]
-    SerdeJson(#[cause] serde_json::error::Error),
+    #[fail(display = "io error")]
+    Io,
+    #[fail(display = "serde error")]
+    Serde,
+}
+
+#[derive(Debug)]
+pub struct KvdError {
+    ctx: Context<KvdErrorKind>,
+}
+
+impl KvdError {
+    pub fn kind(&self) -> KvdErrorKind {
+        *self.ctx.get_context()
+    }
+}
+
+impl Fail for KvdError {
+    fn cause(&self) -> Option<&dyn Fail> {
+        self.ctx.cause()
+    }
+
+    fn backtrace(&self) -> Option<&Backtrace> {
+        self.ctx.backtrace()
+    }
+}
+
+impl Display for KvdError {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        Display::fmt(&self.ctx, f)
+    }
+}
+
+impl From<KvdErrorKind> for KvdError {
+    fn from(kind: KvdErrorKind) -> Self {
+        KvdError {
+            ctx: Context::new(kind),
+        }
+    }
+}
+
+impl From<Context<KvdErrorKind>> for KvdError {
+    fn from(ctx: Context<KvdErrorKind>) -> Self {
+        KvdError { ctx }
+    }
 }
 
 impl From<io::Error> for KvdError {
     fn from(e: io::Error) -> Self {
-        KvdError::Io(e)
+        KvdError {
+            ctx: Context::new(KvdErrorKind::Io),
+        }
     }
 }
 
 impl From<serde_json::error::Error> for KvdError {
     fn from(e: serde_json::error::Error) -> Self {
-        KvdError::SerdeJson(e)
+        KvdError {
+            ctx: Context::new(KvdErrorKind::Serde),
+        }
     }
 }
 
