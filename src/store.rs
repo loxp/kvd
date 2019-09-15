@@ -314,7 +314,7 @@ mod tests {
     fn test_del() {
         let mut store = get_test_store();
         let result = store.del(Vec::from("key"));
-        assert_eq!(Err(KvdError::KeyNotFound), result);
+        assert_eq!(Err(KvdError::from(KvdErrorKind::KeyNotFound)), result);
     }
 
     #[test]
@@ -331,7 +331,7 @@ mod tests {
         let result = store.set(key.clone(), value.clone());
         assert_eq!(Ok(()), result);
         let result = store.get(key.clone());
-        assert_eq!(Ok(Some(&value)), result);
+        assert_eq!(Ok(Some(value.clone())), result);
         let result = store.del(key.clone());
         assert_eq!(Ok(()), result);
         let result = store.get(key.clone());
@@ -360,15 +360,15 @@ mod tests {
             assert_eq!(Ok(()), result);
 
             let result = store.get(key.clone());
-            assert_eq!(Ok(Some(&value)), result);
+            assert_eq!(Ok(Some(value.clone())), result);
             // drop the store automatically
         }
 
         // reopen the store and the data should be existed
         {
-            let store = Store::open(path.clone()).unwrap();
+            let mut store = Store::open(path.clone()).unwrap();
             let result = store.get(key.clone());
-            assert_eq!(Ok(Some(&value)), result);
+            assert_eq!(Ok(Some(value.clone())), result);
         }
     }
 
@@ -380,7 +380,7 @@ mod tests {
     fn get_tmp_store_path() -> PathBuf {
         let time = SystemTime::now();
         let time = time.duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let path_str = format!("/tmp/kvd_store/", time);
+        let path_str = format!("/tmp/kvd_store/{}", time);
         PathBuf::from(path_str)
     }
 }

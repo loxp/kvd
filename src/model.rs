@@ -32,6 +32,13 @@ impl KvdError {
     }
 }
 
+/// TODO: is it right?
+impl PartialEq for KvdError {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind() == other.kind()
+    }
+}
+
 impl Fail for KvdError {
     fn cause(&self) -> Option<&dyn Fail> {
         self.ctx.cause()
