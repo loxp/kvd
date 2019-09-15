@@ -70,22 +70,30 @@ impl Store {
     }
 
     pub fn set(&mut self, key: Vec<u8>, value: Vec<u8>) -> KvdResult<()> {
-        // write to the current file
-        // update in-memory index
-        // return result
-        unimplemented!()
+        let cmd = Command::set(key.clone(), value);
+        let cmd_pos = self.file_store.write_command(cmd)?;
+        self.index.insert(key.clone(), cmd_pos);
+        Ok(())
     }
 
-    pub fn get(&self, key: Vec<u8>) -> KvdResult<Option<&Vec<u8>>> {
-        // search in in-memory index, and read from file by index
-        // return result
-        unimplemented!()
+    /// TODO: change &mut to &
+    pub fn get(&mut self, key: Vec<u8>) -> KvdResult<Option<Vec<u8>>> {
+        let cmd_pos = self.index.get(&key);
+        if let None = cmd_pos {
+            return Ok(None);
+        }
+        let cmd = self.file_store.read_command_position(cmd_pos.unwrap())?;
+        match cmd {
+            Command::Set { key: _, value: v } => { Ok(Some(v)) }
+            _ => Err(KvdError::InvalidValue)
+        }
     }
 
     pub fn del(&mut self, key: Vec<u8>) -> KvdResult<()> {
-        // write to the current file
-        // update in-memory index
-        unimplemented!()
+        let cmd = Command::del(key.clone());
+        let cmd_pos = self.file_store.write_command(cmd)?;
+        self.index.remove(&key);
+        Ok(())
     }
 }
 
@@ -129,13 +137,12 @@ impl FileStore {
         }
     }
 
-    pub fn set(&mut self, key: Vec<u8>, value: Vec<u8>) -> KvdResult<CommandPosition> {
+    fn write_command(&mut self, cmd: Command) -> KvdResult<CommandPosition> {
         if self.current_write_log.is_full() {
             self.change_to_new_wal()?;
         }
 
-        let command = Command::set(key, value);
-        let data = serde_json::to_vec(&command)?;
+        let data = serde_json::to_vec(&cmd)?;
         self.current_write_log.write(&data)?;
 
         Ok(CommandPosition {
@@ -143,6 +150,17 @@ impl FileStore {
             pos: self.current_write_log.pos,
             len: data.len() as u64,
         })
+    }
+
+    fn read_command_position(&mut self, cmd_pos: &CommandPosition) -> KvdResult<Command> {
+        let mut wal_reader = self.read_logs.get_mut(cmd_pos.file_num as usize).ok_or_else(|| KvdError::KeyNotFound)?;
+
+        wal_reader.seek(SeekFrom::Current(cmd_pos.pos as i64))?;
+        let mut data = Vec::with_capacity(cmd_pos.len as usize);
+        wal_reader.read(data.as_mut_slice())?;
+
+        let cmd = serde_json::from_slice(&data)?;
+        Ok(cmd)
     }
 
     fn build_wal_writer(path: &Path, file_num: u64) -> KvdResult<WalWriter<File>> {
