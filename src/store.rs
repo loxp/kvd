@@ -1,3 +1,4 @@
+use crate::model::KvdErrorKind::KeyNotFound;
 use crate::model::{KvdError, KvdErrorKind, KvdResult};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -29,6 +30,7 @@ impl Command {
     }
 }
 
+#[derive(Debug)]
 struct CommandPosition {
     pub file_num: u64,
     pub pos: u64,
@@ -90,6 +92,9 @@ impl Store {
     }
 
     pub fn del(&mut self, key: Vec<u8>) -> KvdResult<()> {
+        if let None = self.index.get(&key) {
+            return Err(KvdError::from(KvdErrorKind::KeyNotFound));
+        }
         let cmd = Command::del(key.clone());
         let cmd_pos = self.file_store.write_command(cmd)?;
         self.index.remove(&key);
@@ -105,6 +110,10 @@ impl FileStore {
         if sorted_file_number_list.is_empty() {
             let mut readers: Vec<WalReader<File>> = Vec::new();
             let writer = Self::build_wal_writer(&path, 0)?;
+            let wal_path = Self::wal_path(&path, 0);
+            let read_wal = File::open(wal_path)?;
+            let reader = WalReader::new(read_wal)?;
+            readers.push(reader);
             Ok(FileStore {
                 dir: path.clone(),
                 current_file_num: 0,
@@ -143,11 +152,13 @@ impl FileStore {
         }
 
         let data = serde_json::to_vec(&cmd)?;
+        let pos = self.current_write_log.pos;
         self.current_write_log.write(&data)?;
+        self.current_write_log.flush()?; // important, the reader may not read the correct data if not flush.
 
         Ok(CommandPosition {
             file_num: self.current_file_num,
-            pos: self.current_write_log.pos,
+            pos,
             len: data.len() as u64,
         })
     }
@@ -158,11 +169,16 @@ impl FileStore {
             .get_mut(cmd_pos.file_num as usize)
             .ok_or_else(|| KvdError::from(KvdErrorKind::KeyNotFound))?;
 
-        wal_reader.seek(SeekFrom::Current(cmd_pos.pos as i64))?;
-        let mut data = Vec::with_capacity(cmd_pos.len as usize);
-        wal_reader.read(data.as_mut_slice())?;
+        wal_reader.seek(SeekFrom::Start(cmd_pos.pos))?;
 
-        let cmd = serde_json::from_slice(&data)?;
+        // cannot use Vec::with_capacity(), since the len() is 0
+        let mut data = vec![0; cmd_pos.len as usize];
+        let read_size = wal_reader.read(data.as_mut_slice())?;
+        let cmd = serde_json::from_slice::<Command>(&data)?;
+
+        // TODO: use take to reduce copy?
+        //         let cmd_reader = wal_reader.take(cmd_pos.len);
+        //        let cmd = serde_json::from_reader(cmd_reader)?;
         Ok(cmd)
     }
 
@@ -194,6 +210,10 @@ impl FileStore {
         let current_num = self.current_file_num + 1;
         self.current_write_log = Self::build_wal_writer(&self.dir, current_num)?;
         self.current_file_num = current_num;
+        let wal_path = Self::wal_path(&self.dir, current_num);
+        let read_wal = File::open(wal_path)?;
+        let reader = WalReader::new(read_wal)?;
+        self.read_logs.push(reader);
         Ok(())
     }
 
@@ -341,10 +361,7 @@ mod tests {
     #[test]
     fn test_data_persistance() {
         // define test path
-        let time = SystemTime::now();
-        let time = time.duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let path_str = format!("/tmp/kvd_store_persistence_{}.wal", time);
-        let path = PathBuf::from(path_str);
+        let path = get_tmp_store_path();
 
         // define test data
         let key = Vec::from("key");
