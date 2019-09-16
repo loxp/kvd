@@ -3,7 +3,7 @@ use failure::{Backtrace, Context, Fail};
 use std::fmt::{Error, Formatter};
 use std::io;
 
-type Command = Vec<Vec<u8>>;
+type Request = Vec<Vec<u8>>;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
 pub enum KvdErrorKind {
@@ -89,7 +89,7 @@ impl From<serde_json::error::Error> for KvdError {
 
 pub type KvdResult<T> = Result<T, KvdError>;
 
-pub fn parse_command_from_string(cmd: String) -> KvdResult<Command> {
+pub fn parse_command_from_string(cmd: String) -> KvdResult<Request> {
     let tokens = cmd
         .split(" ")
         .filter(|s| !s.is_empty())
