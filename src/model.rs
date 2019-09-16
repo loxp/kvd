@@ -19,6 +19,8 @@ pub enum KvdErrorKind {
     Io,
     #[fail(display = "serde error")]
     Serde,
+    #[fail(display = "file not found")]
+    FileNotFound,
 }
 
 #[derive(Debug)]

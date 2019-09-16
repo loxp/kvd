@@ -1,6 +1,7 @@
 use crate::model::KvdErrorKind::KeyNotFound;
 use crate::model::{KvdError, KvdErrorKind, KvdResult};
 use serde::{Deserialize, Serialize};
+use serde_json::Deserializer;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
@@ -66,9 +67,44 @@ impl Store {
         // open the file
         // read the origin data and create in-memory index
         // return store
-        let file_store = FileStore::open(path)?;
-        let index = BTreeMap::new();
+        let mut file_store = FileStore::open(path)?;
+        let mut index = BTreeMap::new();
+
+        Self::load(&mut file_store, &mut index)?;
+
         Ok(Store { file_store, index })
+    }
+
+    fn load(
+        file_store: &mut FileStore,
+        index: &mut BTreeMap<Vec<u8>, CommandPosition>,
+    ) -> KvdResult<()> {
+        for i in 0..file_store.read_logs.len() {
+            let reader = file_store
+                .read_logs
+                .get_mut(i)
+                .ok_or_else(|| KvdError::from(KvdErrorKind::FileNotFound))?;
+            let mut pos = reader.seek(SeekFrom::Start(0))?;
+            let mut stream = Deserializer::from_reader(reader).into_iter::<Command>();
+            while let Some(cmd) = stream.next() {
+                let new_pos = stream.byte_offset();
+                match cmd? {
+                    Command::Set { key, .. } => {
+                        let cmd_pos = CommandPosition {
+                            file_num: i as u64,
+                            pos,
+                            len: new_pos as u64 - pos,
+                        };
+                        index.insert(key, cmd_pos);
+                    }
+                    Command::Del { key } => {
+                        index.remove(&key);
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub fn set(&mut self, key: Vec<u8>, value: Vec<u8>) -> KvdResult<()> {
@@ -240,11 +276,6 @@ impl StoreIndex {
         StoreIndex {
             map: BTreeMap::new(),
         }
-    }
-
-    // load from pair iterator
-    pub fn load() -> KvdResult<()> {
-        unimplemented!()
     }
 }
 
