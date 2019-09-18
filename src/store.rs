@@ -60,8 +60,6 @@ struct StoreIndex {
 }
 
 impl Store {
-    const DEFAULT_INITIAL_CAPACITY: usize = 128;
-
     /// the path must be a directory that all the data are stored in the directory
     pub fn open(path: PathBuf) -> KvdResult<Self> {
         // open the file
