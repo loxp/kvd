@@ -26,6 +26,6 @@ mod tests {
 
     #[test]
     fn test_new_server() {
-        let server = Server::new("conf/kvd.yml");
+        let server = Server::new("conf/kvd.yml").unwrap();
     }
 }
