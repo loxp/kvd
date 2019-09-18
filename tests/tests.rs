@@ -1,6 +1,6 @@
-use std::process::Command;
 use assert_cmd::prelude::*;
 use predicates::str::contains;
+use std::process::Command;
 
 #[test]
 fn test_kvd_no_args() {
@@ -9,19 +9,24 @@ fn test_kvd_no_args() {
 
 #[test]
 fn test_kvd_version() {
-    Command::cargo_bin("kvd").unwrap().arg("--version").assert().stdout(contains(env!("CARGO_PKG_VERSION")));
+    Command::cargo_bin("kvd")
+        .unwrap()
+        .arg("--version")
+        .assert()
+        .stdout(contains(env!("CARGO_PKG_VERSION")));
 }
 
 #[test]
 fn test_kvd_create() {
-    Command::cargo_bin("kvd").unwrap().arg("--config=conf/default.yaml").assert().success();
+    Command::cargo_bin("kvd")
+        .unwrap()
+        .arg("--config=conf/default.yaml")
+        .assert()
+        .success();
 }
 
 #[test]
-fn test_kvd_get_set_del() {
-    Command::cargo_bin("kvd").unwrap().arg("--config=conf/default.yaml").stdin();
-    Command::stdin()
-}
+fn test_kvd_get_set_del() {}
 
 #[test]
 fn test_kvd_quit() {}

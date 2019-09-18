@@ -1,10 +1,10 @@
 use config::ConfigError;
 use failure::_core::fmt::Display;
+use failure::_core::str::Utf8Error;
 use failure::{Backtrace, Context, Fail};
 use std::fmt::{Error, Formatter};
 use std::io;
 use std::string::FromUtf8Error;
-use failure::_core::str::Utf8Error;
 
 type Request = Vec<Vec<u8>>;
 
