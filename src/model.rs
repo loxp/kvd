@@ -3,6 +3,8 @@ use failure::_core::fmt::Display;
 use failure::{Backtrace, Context, Fail};
 use std::fmt::{Error, Formatter};
 use std::io;
+use std::string::FromUtf8Error;
+use failure::_core::str::Utf8Error;
 
 type Request = Vec<Vec<u8>>;
 
@@ -24,6 +26,8 @@ pub enum KvdErrorKind {
     FileNotFound,
     #[fail(display = "config error")]
     Config,
+    #[fail(display = "string convert error")]
+    StringConvertError,
 }
 
 #[derive(Debug)]
@@ -98,10 +102,18 @@ impl From<ConfigError> for KvdError {
     }
 }
 
+impl From<Utf8Error> for KvdError {
+    fn from(e: Utf8Error) -> Self {
+        KvdError {
+            ctx: Context::new(KvdErrorKind::StringConvertError),
+        }
+    }
+}
+
 pub type KvdResult<T> = Result<T, KvdError>;
 
-pub fn parse_command_from_string(cmd: String) -> KvdResult<Request> {
-    let tokens = cmd
+pub fn parse_request_from_line(line: String) -> KvdResult<Request> {
+    let tokens = line
         .split(" ")
         .filter(|s| !s.is_empty())
         .map(|s| Vec::from(s))
@@ -140,7 +152,7 @@ mod tests {
 
         for i in 0..testcases.len() {
             let testcase = testcases.get(i).unwrap();
-            let cmd = parse_command_from_string(testcase.input.to_string()).unwrap();
+            let cmd = parse_request_from_line(testcase.input.to_string()).unwrap();
             for j in 0..testcase.expect.len() {
                 let a = testcase.expect[j].as_bytes();
                 let b = cmd.get(j).unwrap().as_slice();
