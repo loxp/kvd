@@ -11,7 +11,7 @@ use std::{fs, io};
 
 const DEFAULT_FILE_CAPACITY: u64 = 1024;
 
-struct Store {
+pub struct Store {
     file_store: FileStore,
     index: BTreeMap<Vec<u8>, CommandPosition>,
 }

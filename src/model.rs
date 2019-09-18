@@ -1,3 +1,4 @@
+use config::ConfigError;
 use failure::_core::fmt::Display;
 use failure::{Backtrace, Context, Fail};
 use std::fmt::{Error, Formatter};
@@ -21,6 +22,8 @@ pub enum KvdErrorKind {
     Serde,
     #[fail(display = "file not found")]
     FileNotFound,
+    #[fail(display = "config error")]
+    Config,
 }
 
 #[derive(Debug)]
@@ -83,6 +86,14 @@ impl From<serde_json::error::Error> for KvdError {
     fn from(e: serde_json::error::Error) -> Self {
         KvdError {
             ctx: Context::new(KvdErrorKind::Serde),
+        }
+    }
+}
+
+impl From<ConfigError> for KvdError {
+    fn from(e: ConfigError) -> Self {
+        KvdError {
+            ctx: Context::new(KvdErrorKind::Config),
         }
     }
 }
