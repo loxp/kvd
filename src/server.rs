@@ -4,7 +4,7 @@ use crate::model::{KvdError, KvdErrorKind, KvdResult};
 use crate::store::Store;
 use std::fs::File;
 use std::io;
-use std::io::{BufRead, stdin};
+use std::io::{stdin, BufRead};
 use std::path::{Path, PathBuf};
 use std::str;
 
@@ -31,7 +31,10 @@ impl Server {
             let request = model::parse_request_from_line(line)?;
             let result = self.dispatch_request(request);
             match result {
-                Ok(r) => println!("{:?}", str::from_utf8(r.as_slice()).unwrap_or("not a utf-8 value")),
+                Ok(r) => println!(
+                    "{:?}",
+                    str::from_utf8(r.as_slice()).unwrap_or("not a utf-8 value")
+                ),
                 Err(e) => println!("{:?}", e),
             }
         }
@@ -45,18 +48,10 @@ impl Server {
             .ok_or(KvdError::from(KvdErrorKind::InvalidRequest))?;
 
         let result = match cmd.as_slice() {
-            b"get" => {
-                self.handle_get(request).map(|r| r.unwrap_or(Vec::new()))
-            }
-            b"set" => {
-                self.handle_set(request).and(Ok(Vec::new()))
-            }
-            b"del" => {
-                self.handle_del(request).and(Ok(Vec::new()))
-            }
-            _ => {
-                Err(KvdError::from(KvdErrorKind::InvalidRequest))
-            }
+            b"get" => self.handle_get(request).map(|r| r.unwrap_or(Vec::new())),
+            b"set" => self.handle_set(request).and(Ok(Vec::new())),
+            b"del" => self.handle_del(request).and(Ok(Vec::new())),
+            _ => Err(KvdError::from(KvdErrorKind::InvalidRequest)),
         };
 
         result
@@ -75,7 +70,10 @@ impl Server {
         if request.len() != 3 {
             return Err(KvdError::from(KvdErrorKind::InvalidRequest));
         }
-        self.store.set(request.get(1).unwrap().clone(), request.get(2).unwrap().clone())
+        self.store.set(
+            request.get(1).unwrap().clone(),
+            request.get(2).unwrap().clone(),
+        )
     }
 
     fn handle_del(&mut self, request: Vec<Vec<u8>>) -> KvdResult<()> {
