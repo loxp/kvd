@@ -4,7 +4,7 @@ use crate::model::{KvdError, KvdErrorKind, KvdResult};
 use crate::store::Store;
 use std::fs::File;
 use std::io;
-use std::io::BufRead;
+use std::io::{BufRead, stdin};
 use std::path::{Path, PathBuf};
 use std::str;
 
@@ -29,62 +29,60 @@ impl Server {
         for line in stdin.lock().lines() {
             let line = line?;
             let request = model::parse_request_from_line(line)?;
-
-            let cmd = request
-                .get(0)
-                .ok_or(KvdError::from(KvdErrorKind::KeyNotFound))?;
-            let set = Vec::from("set");
-            let get = Vec::from("get");
-            let del = Vec::from("del");
-            if cmd == &get {
-                let key = request
-                    .get(1)
-                    .ok_or(KvdError::from(KvdErrorKind::InvalidRequest))?;
-                let value = self.store.get(key.clone())?.unwrap_or(Vec::new());
-                println!("{:?}", str::from_utf8(&value)?);
-            } else if cmd == &set {
-                let key = request
-                    .get(1)
-                    .ok_or(KvdError::from(KvdErrorKind::InvalidRequest))?;
-                let value = request
-                    .get(2)
-                    .ok_or(KvdError::from(KvdErrorKind::InvalidRequest))?;
-                let result = self.store.set(key.clone(), value.clone())?;
-                println!("OK");
-            } else if cmd == &del {
-                let key = request
-                    .get(1)
-                    .ok_or(KvdError::from(KvdErrorKind::InvalidRequest))?;
-                let result = self.store.del(key.clone())?;
-                println!("OK");
-            } else {
-                println!("invalid command");
+            let result = self.dispatch_request(request);
+            match result {
+                Ok(r) => println!("{:?}", &*r),
+                Err(e) => println!("{:?}", e),
             }
-
-            // TODO: why match Vec cannot work?
-
-            /*  match cmd.clone() {
-                get => {
-                    let key = request.get(1).ok_or(KvdError::from(KvdErrorKind::InvalidRequest))?;
-                    println!("{:?}", self.store.get(key.clone())?);
-                }
-                set => {
-                    let key = request.get(1).ok_or(KvdError::from(KvdErrorKind::InvalidRequest))?;
-                    let value = request.get(2).ok_or(KvdError::from(KvdErrorKind::InvalidRequest))?;
-                    let result = self.store.set(key.clone(), value.clone())?;
-                    println!("OK");
-                }
-                del => {
-                    let key = request.get(1).ok_or(KvdError::from(KvdErrorKind::InvalidRequest))?;
-                    let result = self.store.del(key.clone())?;
-                    println!("OK");
-                }
-                _ => {
-                    println!("invalid command");
-                }
-            }*/
         }
         Ok(())
+    }
+
+    /// return a str in Vec for display
+    fn dispatch_request(&mut self, request: Vec<Vec<u8>>) -> KvdResult<Vec<u8>> {
+        let cmd = request
+            .get(0)
+            .ok_or(KvdError::from(KvdErrorKind::InvalidRequest))?;
+
+        let result = match cmd.as_slice() {
+            b"get" => {
+                self.handle_get(request).map(|r| r.unwrap_or(Vec::new()))
+            }
+            b"set" => {
+                self.handle_set(request).and(Ok(Vec::new()))
+            }
+            b"del" => {
+                self.handle_del(request).and(Ok(Vec::new()))
+            }
+            _ => {
+                Err(KvdError::from(KvdErrorKind::InvalidRequest))
+            }
+        };
+
+        result
+    }
+
+    // TODO: is it right to return a nil Vec when key is not found?
+    fn handle_get(&mut self, request: Vec<Vec<u8>>) -> KvdResult<Option<Vec<u8>>> {
+        if request.len() != 2 {
+            return Err(KvdError::from(KvdErrorKind::InvalidRequest));
+        }
+        let result = self.store.get(request.get(1).unwrap().clone())?;
+        Ok(result)
+    }
+
+    fn handle_set(&mut self, request: Vec<Vec<u8>>) -> KvdResult<()> {
+        if request.len() != 3 {
+            return Err(KvdError::from(KvdErrorKind::InvalidRequest));
+        }
+        self.store.set(request.get(1).unwrap().clone(), request.get(2).unwrap().clone())
+    }
+
+    fn handle_del(&mut self, request: Vec<Vec<u8>>) -> KvdResult<()> {
+        if request.len() != 2 {
+            return Err(KvdError::from(KvdErrorKind::InvalidRequest));
+        }
+        self.store.del(request.get(1).unwrap().clone())
     }
 }
 
