@@ -31,7 +31,7 @@ impl Server {
             let request = model::parse_request_from_line(line)?;
             let result = self.dispatch_request(request);
             match result {
-                Ok(r) => println!("{:?}", &*r),
+                Ok(r) => println!("{:?}", str::from_utf8(r.as_slice()).unwrap_or("not a utf-8 value")),
                 Err(e) => println!("{:?}", e),
             }
         }
