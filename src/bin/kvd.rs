@@ -18,6 +18,5 @@ fn main() -> KvdResult<()> {
 
     let config = matches.value_of("config").unwrap();
     let mut server = Server::new(config)?;
-    server.serve();
-    Ok(())
+    server.serve()
 }
