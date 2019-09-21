@@ -1,4 +1,5 @@
 use clap::{App, Arg};
+use config::Config;
 use kvd::engine::bitcask::BitcaskEngine;
 use kvd::engine::KvdEngine;
 use kvd::model::{KvdError, KvdResult};
@@ -23,8 +24,13 @@ fn main() -> KvdResult<()> {
     let mut settings = config::Config::default();
     settings.merge(config::File::with_name(config_path))?;
 
-    let wal_dir = settings.get_str("wal_dir")?;
-    let engine = BitcaskEngine::open(PathBuf::from(wal_dir))?;
+    let engine = get_engine(settings)?;
     let mut server = Server::new(engine)?;
     server.serve()
+}
+
+fn get_engine(config: Config) -> KvdResult<impl KvdEngine> {
+    let wal_dir = config.get_str("wal_dir")?;
+    let engine = BitcaskEngine::open(PathBuf::from(wal_dir))?;
+    Ok(engine)
 }
