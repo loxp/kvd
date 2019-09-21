@@ -1,26 +1,22 @@
+use crate::engine::bitcask::BitcaskEngine;
+use crate::engine::Engine;
 use crate::model;
 use crate::model::KvdErrorKind::KeyNotFound;
 use crate::model::{KvdError, KvdErrorKind, KvdResult};
-use crate::store::Store;
+use config::Config;
 use std::fs::File;
 use std::io;
 use std::io::{stdin, BufRead};
 use std::path::{Path, PathBuf};
 use std::str;
 
-pub struct Server {
-    store: Store,
+pub struct Server<T: Engine> {
+    engine: T,
 }
 
-impl Server {
-    pub fn new(path: &str) -> KvdResult<Server> {
-        let mut settings = config::Config::default();
-        settings.merge(config::File::with_name(path))?;
-
-        let wal_dir = settings.get_str("wal_dir")?;
-        let store = Store::open(PathBuf::from(wal_dir))?;
-        let server = Server { store };
-
+impl<T: Engine> Server<T> {
+    pub fn new(engine: T) -> KvdResult<Server<T>> {
+        let server = Server { engine };
         Ok(server)
     }
 
@@ -62,7 +58,7 @@ impl Server {
         if request.len() != 2 {
             return Err(KvdError::from(KvdErrorKind::InvalidRequest));
         }
-        let result = self.store.get(request.get(1).unwrap().clone())?;
+        let result = self.engine.get(request.get(1).unwrap().clone())?;
         Ok(result)
     }
 
@@ -70,7 +66,7 @@ impl Server {
         if request.len() != 3 {
             return Err(KvdError::from(KvdErrorKind::InvalidRequest));
         }
-        self.store.set(
+        self.engine.set(
             request.get(1).unwrap().clone(),
             request.get(2).unwrap().clone(),
         )
@@ -80,16 +76,18 @@ impl Server {
         if request.len() != 2 {
             return Err(KvdError::from(KvdErrorKind::InvalidRequest));
         }
-        self.store.del(request.get(1).unwrap().clone())
+        self.engine.del(request.get(1).unwrap().clone())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::mock::MockEngine;
 
     #[test]
     fn test_new_server() {
-        let server = Server::new("conf/default.yml").unwrap();
+        let engine = MockEngine::new();
+        let server = Server::new(engine).unwrap();
     }
 }

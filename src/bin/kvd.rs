@@ -1,6 +1,9 @@
 use clap::{App, Arg};
+use kvd::engine::bitcask::BitcaskEngine;
+use kvd::engine::Engine;
 use kvd::model::{KvdError, KvdResult};
 use kvd::server::Server;
+use std::path::PathBuf;
 
 fn main() -> KvdResult<()> {
     let matches = App::new(env!("CARGO_PKG_NAME"))
@@ -16,7 +19,12 @@ fn main() -> KvdResult<()> {
         )
         .get_matches();
 
-    let config = matches.value_of("config").unwrap();
-    let mut server = Server::new(config)?;
+    let config_path = matches.value_of("config").unwrap();
+    let mut settings = config::Config::default();
+    settings.merge(config::File::with_name(config_path))?;
+
+    let wal_dir = settings.get_str("wal_dir")?;
+    let engine = BitcaskEngine::open(PathBuf::from(wal_dir))?;
+    let mut server = Server::new(engine)?;
     server.serve()
 }

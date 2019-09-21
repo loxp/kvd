@@ -1,3 +1,4 @@
+use crate::engine::Engine;
 use crate::model::KvdErrorKind::KeyNotFound;
 use crate::model::{KvdError, KvdErrorKind, KvdResult};
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,7 @@ use std::{fs, io};
 
 const DEFAULT_FILE_CAPACITY: u64 = 1024;
 
-pub struct Store {
+pub struct BitcaskEngine {
     file_store: FileStore,
     index: BTreeMap<Vec<u8>, CommandPosition>,
 }
@@ -59,7 +60,7 @@ struct StoreIndex {
     map: BTreeMap<Vec<u8>, CommandPosition>,
 }
 
-impl Store {
+impl BitcaskEngine {
     /// the path must be a directory that all the data are stored in the directory
     pub fn open(path: PathBuf) -> KvdResult<Self> {
         // open the file
@@ -70,7 +71,7 @@ impl Store {
 
         Self::load(&mut file_store, &mut index)?;
 
-        Ok(Store { file_store, index })
+        Ok(BitcaskEngine { file_store, index })
     }
 
     fn load(
@@ -104,8 +105,10 @@ impl Store {
 
         Ok(())
     }
+}
 
-    pub fn set(&mut self, key: Vec<u8>, value: Vec<u8>) -> KvdResult<()> {
+impl Engine for BitcaskEngine {
+    fn set(&mut self, key: Vec<u8>, value: Vec<u8>) -> KvdResult<()> {
         let cmd = Command::set(key.clone(), value);
         let cmd_pos = self.file_store.write_command(cmd)?;
         self.index.insert(key.clone(), cmd_pos);
@@ -113,7 +116,7 @@ impl Store {
     }
 
     /// TODO: change &mut to &
-    pub fn get(&mut self, key: Vec<u8>) -> KvdResult<Option<Vec<u8>>> {
+    fn get(&mut self, key: Vec<u8>) -> KvdResult<Option<Vec<u8>>> {
         let cmd_pos = self.index.get(&key);
         if let None = cmd_pos {
             return Ok(None);
@@ -125,7 +128,7 @@ impl Store {
         }
     }
 
-    pub fn del(&mut self, key: Vec<u8>) -> KvdResult<()> {
+    fn del(&mut self, key: Vec<u8>) -> KvdResult<()> {
         if let None = self.index.get(&key) {
             return Err(KvdError::from(KvdErrorKind::KeyNotFound));
         }
@@ -397,7 +400,7 @@ mod tests {
         let value = Vec::from("value");
 
         {
-            let mut store = Store::open(path.clone()).unwrap();
+            let mut store = BitcaskEngine::open(path.clone()).unwrap();
 
             let result = store.get(key.clone());
             assert_eq!(Ok(None), result);
@@ -412,15 +415,15 @@ mod tests {
 
         // reopen the store and the data should be existed
         {
-            let mut store = Store::open(path.clone()).unwrap();
+            let mut store = BitcaskEngine::open(path.clone()).unwrap();
             let result = store.get(key.clone());
             assert_eq!(Ok(Some(value.clone())), result);
         }
     }
 
-    fn get_test_store() -> Store {
+    fn get_test_store() -> BitcaskEngine {
         let path = get_tmp_store_path();
-        Store::open(path).unwrap()
+        BitcaskEngine::open(path).unwrap()
     }
 
     fn get_tmp_store_path() -> PathBuf {
