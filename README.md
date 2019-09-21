@@ -39,7 +39,7 @@ First clone and run kvd.
 
 ```
 git clone https://github.com/loxp/kvd
-cargo run -- --config=../conf/default.yml
+cargo run -- --config=conf/default.yml
 ```
 
 Now kvd supports command line user interface. It will be changed to client-server interface later, using Redis Protocol.
