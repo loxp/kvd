@@ -1,4 +1,4 @@
-use super::Engine;
+use super::KvdEngine;
 use crate::model::KvdResult;
 
 pub struct MockEngine {}
@@ -9,7 +9,7 @@ impl MockEngine {
     }
 }
 
-impl Engine for MockEngine {
+impl KvdEngine for MockEngine {
     fn set(&mut self, key: Vec<u8>, value: Vec<u8>) -> KvdResult<()> {
         Ok(())
     }

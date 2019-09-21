@@ -1,6 +1,6 @@
 use clap::{App, Arg};
 use kvd::engine::bitcask::BitcaskEngine;
-use kvd::engine::Engine;
+use kvd::engine::KvdEngine;
 use kvd::model::{KvdError, KvdResult};
 use kvd::server::Server;
 use std::path::PathBuf;

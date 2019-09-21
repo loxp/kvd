@@ -1,4 +1,4 @@
-use crate::engine::Engine;
+use crate::engine::KvdEngine;
 use crate::model::KvdErrorKind::KeyNotFound;
 use crate::model::{KvdError, KvdErrorKind, KvdResult};
 use serde::{Deserialize, Serialize};
@@ -107,7 +107,7 @@ impl BitcaskEngine {
     }
 }
 
-impl Engine for BitcaskEngine {
+impl KvdEngine for BitcaskEngine {
     fn set(&mut self, key: Vec<u8>, value: Vec<u8>) -> KvdResult<()> {
         let cmd = Command::set(key.clone(), value);
         let cmd_pos = self.file_store.write_command(cmd)?;

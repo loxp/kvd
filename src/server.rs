@@ -1,5 +1,5 @@
 use crate::engine::bitcask::BitcaskEngine;
-use crate::engine::Engine;
+use crate::engine::KvdEngine;
 use crate::model;
 use crate::model::KvdErrorKind::KeyNotFound;
 use crate::model::{KvdError, KvdErrorKind, KvdResult};
@@ -10,11 +10,11 @@ use std::io::{stdin, BufRead};
 use std::path::{Path, PathBuf};
 use std::str;
 
-pub struct Server<T: Engine> {
+pub struct Server<T: KvdEngine> {
     engine: T,
 }
 
-impl<T: Engine> Server<T> {
+impl<T: KvdEngine> Server<T> {
     pub fn new(engine: T) -> KvdResult<Server<T>> {
         let server = Server { engine };
         Ok(server)
