@@ -24,13 +24,14 @@ fn main() -> KvdResult<()> {
     let mut settings = config::Config::default();
     settings.merge(config::File::with_name(config_path))?;
 
-    let engine = get_engine(settings)?;
-    let mut server = Server::new(engine)?;
+    let mut server = get_server(settings)?;
     server.serve()
 }
 
-fn get_engine(config: Config) -> KvdResult<impl KvdEngine> {
+// TODO: 这里必须用impl KvdEngine, 否则编译报错. 原因?
+fn get_server(config: Config) -> KvdResult<Server<impl KvdEngine>> {
     let wal_dir = config.get_str("wal_dir")?;
     let engine = BitcaskEngine::open(PathBuf::from(wal_dir))?;
-    Ok(engine)
+    let mut server = Server::new(engine)?;
+    Ok(server)
 }
