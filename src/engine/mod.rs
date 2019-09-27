@@ -1,5 +1,5 @@
 pub mod bitcask;
-pub mod mock;
+pub mod memory;
 
 use crate::model::KvdResult;
 

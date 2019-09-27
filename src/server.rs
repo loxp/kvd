@@ -83,11 +83,11 @@ impl<T: KvdEngine> Server<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::mock::MockEngine;
+    use crate::engine::memory::MemoryEngine;
 
     #[test]
     fn test_new_server() {
-        let engine = MockEngine::new();
+        let engine = MemoryEngine::new();
         let server = Server::new(engine).unwrap();
     }
 }
