@@ -7,7 +7,6 @@ use config::Config;
 use std::fs::File;
 use std::io;
 use std::io::{stdin, BufRead};
-use std::path::{Path, PathBuf};
 use std::str;
 
 pub struct Server<T: KvdEngine> {
