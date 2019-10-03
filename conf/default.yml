@@ -1,3 +1,4 @@
 wal_dir: "/tmp/kvd_store/123456"
 log_path: "/tmp/kvd_log/kvd.log"
 log_level: "info"
+server_port: 2048

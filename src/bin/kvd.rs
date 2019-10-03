@@ -39,7 +39,7 @@ fn main() -> KvdResult<()> {
     let _log_guard = init_logger(&settings)?;
 
     let mut server = get_server(&settings)?;
-    server.serve()
+    server.serve_net()
 }
 
 fn init_logger(settings: &Config) -> KvdResult<GlobalLoggerGuard> {
@@ -68,7 +68,8 @@ fn init_logger(settings: &Config) -> KvdResult<GlobalLoggerGuard> {
 // TODO: 这里必须用impl KvdEngine, 否则编译报错. 原因?
 fn get_server(config: &Config) -> KvdResult<Server<impl KvdEngine>> {
     let wal_dir = config.get_str("wal_dir")?;
+    let server_port = config.get_int("server_port")? as u16;
     let engine = BitcaskEngine::open(PathBuf::from(wal_dir))?;
-    let mut server = Server::new(engine)?;
+    let mut server = Server::new(engine, server_port)?;
     Ok(server)
 }
