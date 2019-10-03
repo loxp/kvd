@@ -5,18 +5,19 @@ use crate::model::KvdErrorKind::KeyNotFound;
 use crate::model::{KvdError, KvdErrorKind, KvdResult};
 use config::Config;
 use std::fs::File;
-use std::io;
-use std::io::{stdin, BufRead};
-use std::path::{Path, PathBuf};
+use std::io::{stdin, BufRead, BufReader, BufWriter, Write};
+use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::str;
+use std::{io, thread};
 
 pub struct Server<T: KvdEngine> {
     engine: T,
+    port: u16,
 }
 
 impl<T: KvdEngine> Server<T> {
-    pub fn new(engine: T) -> KvdResult<Server<T>> {
-        let server = Server { engine };
+    pub fn new(engine: T, port: u16) -> KvdResult<Server<T>> {
+        let server = Server { engine, port };
         Ok(server)
     }
 
@@ -24,17 +25,45 @@ impl<T: KvdEngine> Server<T> {
         let stdin = io::stdin();
         for line in stdin.lock().lines() {
             let line = line?;
-            let request = model::parse_request_from_line(line)?;
-            let result = self.dispatch_request(request);
-            match result {
-                Ok(r) => println!(
-                    "{:?}",
-                    str::from_utf8(r.as_slice()).unwrap_or("not a utf-8 value")
-                ),
-                Err(e) => println!("{:?}", e),
-            }
+            self.handle_request(line)?;
         }
         Ok(())
+    }
+
+    pub fn serve_net(&mut self) -> KvdResult<()> {
+        let listener = TcpListener::bind(("0.0.0.0", self.port))?;
+        for stream in listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    self.handle_conn(stream);
+                }
+                Err(e) => warn!("accept stream error: {:?}", e),
+            }
+        }
+
+        Ok(())
+    }
+
+    fn handle_conn(&mut self, conn: TcpStream) -> KvdResult<()> {
+        let mut reader = BufReader::new(&conn);
+        let mut writer = BufWriter::new(&conn);
+        for line in reader.lines() {
+            let line = line?;
+            let ret = self.handle_request(line)?;
+            writer.write(ret.as_bytes())?;
+            writer.flush();
+        }
+        Ok(())
+    }
+
+    fn handle_request(&mut self, line: String) -> KvdResult<String> {
+        let request = model::parse_request_from_line(line)?;
+        let result = self.dispatch_request(request);
+        let ret = match result {
+            Ok(r) => String::from_utf8(r).unwrap_or("not a utf-8 value".to_string()),
+            Err(e) => format!("{:?}", e),
+        };
+        Ok(ret)
     }
 
     /// return a str in Vec for display
@@ -83,11 +112,11 @@ impl<T: KvdEngine> Server<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::mock::MockEngine;
+    use crate::engine::memory::MemoryEngine;
 
     #[test]
     fn test_new_server() {
-        let engine = MockEngine::new();
+        let engine = MemoryEngine::new();
         let server = Server::new(engine).unwrap();
     }
 }
